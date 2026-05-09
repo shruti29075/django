@@ -1,4 +1,6 @@
 # Todo App Manager
+<img width="1917" height="972" alt="image" src="https://github.com/user-attachments/assets/1e950a1c-3e6a-49af-9fe8-c175e9a787d9" />
+
 
 A Django-based To-Do list web application with user authentication, task management, and file upload support.
 
