@@ -67,4 +67,4 @@ Open http://127.0.0.1:8000/ in your browser.
 - For production, serve media files via a proper media server and disable `DEBUG`.
 - Replace `SECRET_KEY` in settings.py before deploying.
 
-
+## output link - https://drive.google.com/file/d/1wzSEKDEIO5a7Sdca4DwqK31IkjUXCGwo/view?usp=sharing
