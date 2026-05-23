@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Keyword Highlighter</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f6f8fb;
+            color: #222;
+        }
+
+        .title {
+            font-size: 28px;
+            color: #2c3e50;
+            margin-top: 20px;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        /* Card that holds the PDF preview */
+        #preview-card {
+            max-width: 1000px;
+            margin: 18px auto;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #pdf-container {
+            width: 100%;
+            position: relative;
+            background: #fff;
+            padding: 18px;
+            box-sizing: border-box;
+        }
+
+        /* Ensure canvases are responsive inside the card */
+        #pdf-container canvas {
+            display: block;
+            margin: 0 auto 18px auto;
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            border-radius: 4px;
+        }
+
+        /* Text layer: hide text by default to avoid duplicate visible text.
+           When a span is highlighted, make the text visible with background. */
+        .textLayer span {
+            color: transparent !important;
+            background: transparent !important;
+        }
+
+        .textLayer span.highlight {
+            background-color: yellow !important;
+            color: #000 !important;
+        }
+
+        /* Make the preview scrollable if tall */
+        .preview-body {
+            max-height: calc(100vh - 240px);
+            overflow: auto;
+            padding: 12px 18px;
+        }
+
+        /* Form alignment */
+        .search-form {
+            max-width: 1000px;
+            margin: 12px auto 0 auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="title text-center">Smart PDF Content Explorer</h2>
+
+    <form method="POST" enctype="multipart/form-data" class="search-form d-flex gap-2 align-items-center justify-content-center">
+        {% csrf_token %}
+        <input class="form-control" type="file" name="document" accept=".pdf" style="max-width:320px;">
+        <input class="form-control" type="text" name="keyword" placeholder="Enter keyword" required style="max-width:420px;">
+        <button class="btn btn-primary" type="submit">Search</button>
+    </form>
+
+    <div id="preview-card" class="card">
+        <div class="card-body preview-body">
+            <div id="pdf-container"></div>
+        </div>
+    </div>
+</div>
+
+{% if pdf_url and keyword %}
+<script>
+    (async () => {
+        const url = "{{ pdf_url }}";
+        const keyword = "{{ keyword }}";
+
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        const container = document.getElementById('pdf-container');
+        container.innerHTML = "";
+
+        const loadingTask = pdfjsLib.getDocument(url);
+        const pdf = await loadingTask.promise;
+
+        // choose a scale that fits comfortably in the page
+        const SCALE = 1.2;
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: SCALE });
+
+            const pageDiv = document.createElement("div");
+            pageDiv.style.position = "relative";
+            pageDiv.style.marginBottom = "30px"; // spacing between pages
+            container.appendChild(pageDiv);
+
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+
+            // Set canvas pixel size and CSS size to avoid blurring/overlap
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            canvas.style.width = Math.ceil(viewport.width) + 'px';
+            canvas.style.height = Math.ceil(viewport.height) + 'px';
+
+            pageDiv.appendChild(canvas);
+
+            // Render the page and wait for it to finish before adding text layer
+            const renderTask = page.render({ canvasContext: context, viewport });
+            await renderTask.promise;
+
+            const textContent = await page.getTextContent();
+
+            const textLayerDiv = document.createElement("div");
+            textLayerDiv.style.position = "absolute";
+            textLayerDiv.style.top = "0";
+            textLayerDiv.style.left = "0";
+            textLayerDiv.style.height = canvas.style.height;
+            textLayerDiv.style.width = canvas.style.width;
+            textLayerDiv.className = 'textLayer';
+            pageDiv.appendChild(textLayerDiv);
+
+            await pdfjsLib.renderTextLayer({
+                textContent: textContent,
+                container: textLayerDiv,
+                viewport: viewport
+            }).promise;
+
+            // Highlight matches
+            const spans = textLayerDiv.querySelectorAll("span");
+            spans.forEach(span => {
+                if (span.textContent && span.textContent.toLowerCase().includes(keyword.toLowerCase())) {
+                    span.classList.add("highlight");
+                }
+            });
+        }
+
+        // After all pages processed, auto-scroll to first match
+        try {
+            const preview = document.querySelector('.preview-body');
+            const first = container.querySelector('.textLayer span.highlight');
+            if (first && preview) {
+                first.setAttribute('tabindex', '-1');
+                const rect = first.getBoundingClientRect();
+                const previewRect = preview.getBoundingClientRect();
+                const offset = rect.top - previewRect.top + preview.scrollTop - preview.clientHeight / 2;
+                preview.scrollTo({top: offset, behavior: 'smooth'});
+                first.focus({preventScroll: true});
+            }
+        } catch (e) {
+            // ignore scroll errors
+            console.warn('Scroll to highlight failed', e);
+        }
+    })();
+</script>
+{% endif %}
+
+</body>
+</html>
